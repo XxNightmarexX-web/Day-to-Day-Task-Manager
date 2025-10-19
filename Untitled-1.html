@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ultimate Task Manager</title>
+<!-- Chart.js CDN for dashboard charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f0f2f5;
+    color: #000;
+    transition: background 0.3s, color 0.3s;
+}
+body.dark { background: #181818; color: #fff; }
+h1 { text-align: center; margin: 20px 0; }
+#notification {
+    position: fixed; top:20px; left:50%; transform:translateX(-50%);
+    background: #ff9800; color:#000; padding:12px 20px; border-radius:8px;
+    display:none; z-index:100; box-shadow:0 2px 6px rgba(0,0,0,0.3); font-weight:bold;
+}
+canvas#confetti { position:fixed; top:0; left:0; pointer-events:none; z-index:999; }
+/* Task Form */
+#taskForm {
+    display:flex; flex-wrap:wrap; gap:10px; justify-content:center;
+    margin-bottom:20px; width:95%; max-width:800px;
+}
+#taskForm input, #taskForm select, #taskForm button { padding:10px; border-radius:5px; border:1px solid #ccc; font-size:1em; }
+#taskForm button { background:#4caf50; color:white; border:none; cursor:pointer; transition:0.3s; }
+#taskForm button:hover { background:#388e3c; }
+/* Task List */
+#taskList { list-style:none; padding:0; width:95%; max-width:800px; }
+.taskItem {
+    background:#fff; padding:12px; margin-bottom:10px; border-radius:8px;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+    box-shadow:0 2px 5px rgba(0,0,0,0.2); transition: transform 0.1s;
+}
+body.dark .taskItem { background:#282c34; box-shadow:0 2px 6px rgba(0,0,0,0.5); }
+.taskItem.completed { text-decoration:line-through; opacity:0.6; }
+.taskItem:hover { transform:scale(1.02); }
+.taskItem span { flex:1 1 60%; }
+.taskItem small { font-size:0.8em; margin-left:5px; }
+.taskItem .category { font-weight:bold; margin-right:5px; }
+/* Priority Colors */
+.low { color:#4caf50; font-weight:bold; }
+.medium { color:#ff9800; font-weight:bold; }
+.high { color:#f44336; font-weight:bold; }
+/* Buttons */
+.taskItem button { margin-left:5px; padding:5px 10px; border:none; border-radius:5px; cursor:pointer; transition:0.2s; }
+.completeBtn { background:#4caf50; color:white; } .completeBtn:hover { background:#388e3c; }
+.deleteBtn { background:#e74c3c; color:white; } .deleteBtn:hover { background:#c0392b; }
+.subtaskBtn { background:#2196f3; color:white; } .subtaskBtn:hover { background:#1976d2; }
+/* Filters */
+.filters { margin-bottom:15px; text-align:center; }
+.filters button { margin:5px; padding:8px 12px; border-radius:5px; border:none; background:#2196f3; color:white; cursor:pointer; transition:0.3s; }
+.filters button:hover { background:#1976d2; }
+/* Calendar */
+#calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; max-width:800px; margin:20px auto; }
+.dayCell { background:#e0e0e0; padding:10px; text-align:center; border-radius:5px; cursor:pointer; }
+body.dark .dayCell { background:#333; }
+.dayCell:hover { background:#b3e5fc; }
+.dayCell.today { border:2px solid #4caf50; }
+/* Dashboard */
+#dashboard { display:flex; flex-wrap:wrap; justify-content:center; gap:20px; max-width:800px; margin-bottom:30px; }
+.chartContainer { background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.2); }
+body.dark .chartContainer { background:#282c34; }
+/* Responsive */
+@media(max-width:600px){ #taskForm input,#taskForm select,#taskForm button { flex:1 1 100%; } .taskItem span { flex:1 1 100%; margin-bottom:5px; } #dashboard { flex-direction:column; align-items:center; } }
+</style>
+</head>
+<body>
+
+<h1>Ultimate Task Manager</h1>
+<div id="notification"></div>
+<canvas id="confetti"></canvas>
+<button id="themeToggle">Toggle Dark/Light Theme</button>
+
+<!-- Progress Bar -->
+<div id="progressContainer" style="width:95%; max-width:800px; background:#ccc; border-radius:8px; overflow:hidden; margin:20px auto;">
+  <div id="progressBar" style="height:20px;width:0%;background:#4caf50;transition:width 0.3s;"></div>
+</div>
+
+<!-- Task Form -->
+<div id="taskForm">
+  <input type="text" id="taskInput" placeholder="Task description">
+  <input type="date" id="taskDate">
+  <input type="time" id="taskTime">
+  <select id="taskPriority">
+    <option value="Low">Low Priority</option>
+    <option value="Medium" selected>Medium Priority</option>
+    <option value="High">High Priority</option>
+  </select>
+  <select id="taskCategory">
+    <option value="General" selected>General</option>
+    <option value="Work">Work</option>
+    <option value="Personal">Personal</option>
+    <option value="Study">Study</option>
+  </select>
+  <select id="taskRecurring">
+    <option value="None" selected>Not Recurring</option>
+    <option value="Daily">Daily</option>
+    <option value="Weekly">Weekly</option>
+  </select>
+  <button id="addBtn">Add Task</button>
+  <button id="exportBtn">Export</button>
+  <button id="importBtn">Import</button>
+  <input type="file" id="importFile" style="display:none;">
+</div>
+
+<!-- Filters -->
+<div class="filters">
+  <button onclick="filterTasks('all')">All</button>
+  <button onclick="filterTasks('pending')">Pending</button>
+  <button onclick="filterTasks('completed')">Completed</button>
+  <button onclick="filterTasks('high')">High</button>
+  <button onclick="filterTasks('medium')">Medium</button>
+  <button onclick="filterTasks('low')">Low</button>
+</div>
+
+<!-- Calendar -->
+<div id="calendar"></div>
+
+<!-- Dashboard -->
+<div id="dashboard">
+  <div class="chartContainer"><canvas id="priorityChart" width="300" height="200"></canvas></div>
+  <div class="chartContainer"><canvas id="categoryChart" width="300" height="200"></canvas></div>
+</div>
+
+<!-- Task List -->
+<ul id="taskList"></ul>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script>
+// --- Variables ---
+let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+let filter='all';
+let darkTheme=false;
+
+// --- DOM ---
+const taskList=document.getElementById('taskList');
+const taskInput=document.getElementById('taskInput');
+const taskDate=document.getElementById('taskDate');
+const taskTime=document.getElementById('taskTime');
+const taskPriority=document.getElementById('taskPriority');
+const taskRecurring=document.getElementById('taskRecurring');
+const taskCategory=document.getElementById('taskCategory');
+const addBtn=document.getElementById('addBtn');
+const notification=document.getElementById('notification');
+const progressBar=document.getElementById('progressBar');
+const themeToggle=document.getElementById('themeToggle');
+const exportBtn=document.getElementById('exportBtn');
+const importBtn=document.getElementById('importBtn');
+const importFile=document.getElementById('importFile');
+const confettiCanvas=document.getElementById('confetti');
+const ctx=confettiCanvas.getContext('2d');
+confettiCanvas.width=window.innerWidth; confettiCanvas.height=window.innerHeight;
+
+// --- Notifications ---
+function showNotification(msg){ notification.textContent=msg; notification.style.display='block'; setTimeout(()=>notification.style.display='none',3000); }
+
+// --- Save & Progress ---
+function saveTasks(){ localStorage.setItem('tasks',JSON.stringify(tasks)); updateProgress(); renderCharts(); }
+function updateProgress(){
+  if(tasks.length===0){ progressBar.style.width='0%'; return; }
+  const completed=tasks.filter(t=>t.completed).length;
+  const percent=(completed/tasks.length)*100;
+  progressBar.style.width=percent+'%';
+  if(percent===100 && tasks.length>0) triggerConfetti();
+}
+
+// --- Render Tasks ---
+function renderTasks(){
+  taskList.innerHTML='';
+  tasks.forEach((task,index)=>{
+    if(filter==='pending' && task.completed) return;
+    if(filter==='completed' && !task.completed) return;
+    if(filter==='high' && task.priority!=='High') return;
+    if(filter==='medium' && task.priority!=='Medium') return;
+    if(filter==='low' && task.priority!=='Low') return;
+    const li=document.createElement('li');
+    li.className='taskItem'+(task.completed?' completed':'');
+    li.innerHTML=`
+      <span><span class="category">${task.category}</span> ${task.text} 
+      <small>${task.date?task.date:''} ${task.time?task.time:''} 
+      <span class="${task.priority.toLowerCase()}">[${task.priority}]</span>
+      ${task.recurring!=='None'?'('+task.recurring+')':''}</small></span>
+      <div>
+        <button class="completeBtn" onclick="toggleTask(${index})">${task.completed?'Undo':'Done'}</button>
+        <button class="deleteBtn" onclick="deleteTask(${index})">Delete</button>
+      </div>`;
+    taskList.appendChild(li);
+  });
+}
+
+// --- Add Task ---
+addBtn.addEventListener('click',()=>{
+  const text=taskInput.value.trim();
+  if(!text) return showNotification("Task description cannot be empty!");
+  const newTask={text,date:taskDate.value,time:taskTime.value,priority:taskPriority.value,category:taskCategory.value,recurring:taskRecurring.value,completed:false};
+  tasks.push(newTask);
+  saveTasks(); renderTasks();
+  taskInput.value=''; taskDate.value=''; taskTime.value='';
+  showNotification(`Task added: "${newTask.text}"`);
+  if(newTask.date && newTask.time) scheduleAlert(newTask);
+});
+
+// --- Toggle Complete ---
+function toggleTask(index){
+  tasks[index].completed=!tasks[index].completed;
+  if(tasks[index].completed && tasks[index].recurring!=='None'){
+    const nextDate=new Date(tasks[index].date);
+    if(tasks[index].recurring==='Daily') nextDate.setDate(nextDate.getDate()+1);
+    if(tasks[index].recurring==='Weekly') nextDate.setDate(nextDate.getDate()+7);
+    tasks[index].date=nextDate.toISOString().split('T')[0];
+    tasks[index].completed=false;
+  }
+  saveTasks(); renderTasks();
+}
+
+// --- Delete Task ---
+function deleteTask(index){ showNotification(`Task deleted: "${tasks[index].text}"`); tasks.splice(index,1); saveTasks(); renderTasks(); }
+
+// --- Filter ---
+function filterTasks(f){ filter=f; renderTasks(); }
+
+// --- Theme Toggle ---
+themeToggle.addEventListener('click',()=>{ darkTheme=!darkTheme; document.body.classList.toggle('dark',darkTheme); });
+
+// --- Alerts ---
+function scheduleAlert(task){
+  if(!task.date || !task.time) return;
+  const now=new Date();
+  const [h,m]=task.time.split(':');
+  const alertTime=new Date(task.date); alertTime.setHours(h,m,0,0);
+  const timeout=alertTime-now;
+  if(timeout>0) setTimeout(()=>showNotification(`Task Reminder: "${task.text}"`),timeout);
+}
+
+// --- Drag & Drop ---
+new Sortable(taskList,{animation:150,onEnd:function(evt){ const moved=tasks.splice(evt.oldIndex,1)[0]; tasks.splice(evt.newIndex,0,moved); saveTasks(); }});
+
+// --- Export/Import ---
+exportBtn.addEventListener('click',()=>{
+  const data=JSON.stringify(tasks,null,2); const blob=new Blob([data],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='tasks.json'; a.click(); URL.revokeObjectURL(url);
+});
+importBtn.addEventListener('click',()=>importFile.click());
+importFile.addEventListener('change',(e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=(e)=>{ try{ tasks=JSON.parse(e.target.result); saveTasks(); renderTasks(); showNotification("Tasks imported!"); }catch(err){ alert("Invalid JSON!"); } };
+  reader.readAsText(file);
+});
+
+// --- Confetti ---
+function triggerConfetti(){
+  const confetti=[]; for(let i=0;i<150;i++) confetti.push({x:Math.random()*confettiCanvas.width,y:Math.random()*confettiCanvas.height,dx:(Math.random()-0.5)*5,dy:(Math.random()-0.5)*5,r:Math.random()*8+2,color:`hsl(${Math.random()*360},100%,50%)`});
+  let count=0; function draw(){ ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+  confetti.forEach(c=>{ ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,2*Math.PI); ctx.fill(); c.x+=c.dx;c.y+=c.dy; if(c.x>confettiCanvas.width)c.x=0;if(c.x<0)c.x=confettiCanvas.width;if(c.y>confettiCanvas.height)c.y=0;if(c.y<0)c.y=confettiCanvas.height; });
+  count++; if(count<150) requestAnimationFrame(draw); else ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); } draw();
+}
+
+// --- Calendar ---
+function renderCalendar(){
+  const calendar=document.getElementById('calendar'); calendar.innerHTML='';
+  const today=new Date(); const year=today.getFullYear(); const month=today.getMonth();
+  const firstDay=new Date(year,month,1).getDay(); const daysInMonth=new Date(year,month+1,0).getDate();
+  for(let i=0;i<firstDay;i++){ const cell=document.createElement('div'); calendar.appendChild(cell); }
+  for(let d=1;d<=daysInMonth;d++){
+    const cell=document.createElement('div'); cell.className='dayCell'+(d===today.getDate()?' today':''); cell.textContent=d;
+    cell.onclick=()=>showTasksForDate(year,month,d); calendar.appendChild(cell);
+  }
+}
+
+// --- Show Tasks for Calendar Date ---
+function showTasksForDate(year,month,date){
+  const dateStr=new Date(year,month,date).toISOString().split('T')[0];
+  const tasksForDate=tasks.filter(t=>t.date===dateStr);
+  if(tasksForDate.length===0){ showNotification("No tasks for this date"); return; }
+  let msg=`Tasks for ${dateStr}:\n`; tasksForDate.forEach(t=>msg+=`- ${t.text} [${t.priority}] (${t.category})\n`); alert(msg);
+}
+
+// --- Dashboard Charts ---
+let priorityChart=null, categoryChart=null;
+function renderCharts(){
+  const priorities=['High','Medium','Low']; const priorityCounts=priorities.map(p=>tasks.filter(t=>t.priority===p).length);
+  const categories=[...new Set(tasks.map(t=>t.category))]; const categoryCounts=categories.map(c=>tasks.filter(t=>t.category===c).length);
+  const pCtx=document.getElementById('priorityChart').getContext('2d'); const cCtx=document.getElementById('categoryChart').getContext('2d');
+  if(priorityChart) priorityChart.destroy(); if(categoryChart) categoryChart.destroy();
+  priorityChart=new Chart(pCtx,{type:'bar',data:{labels:priorities,datasets:[{label:'Tasks by Priority',data:priorityCounts,backgroundColor:['#f44336','#ff9800','#4caf50']}]},options:{responsive:true}});
+  categoryChart=new Chart(cCtx,{type:'pie',data:{labels:categories,datasets:[{label:'Tasks by Category',data:categoryCounts,backgroundColor:categories.map(()=>`hsl(${Math.random()*360},70%,50%)`)}]},options:{responsive:true}});
+}
+
+// --- Initialize ---
+tasks.forEach(t=>{ if(t.date && t.time) scheduleAlert(t); });
+renderTasks(); updateProgress(); renderCalendar(); renderCharts();
+</script>
+
+</body>
+</html>
