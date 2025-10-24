@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>TaskFlow — Ultimate Task Manager</title>
+
+<!-- External libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"></script>
+
+<style>
+/* ------------------------- General Styles ------------------------- */
+:root {
+  --bg: #f6f8fb; --card: #fff; --muted: #6b7280; --accent: #4caf50; --accent2: #06b6d4;
+  --danger: #ef4444; --glass: rgba(255,255,255,0.6); --radius:12px; --shadow:0 8px 22px rgba(8,15,30,0.06);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter, "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial;color:#0f172a;background:linear-gradient(180deg,#eef2ff 0%, #f6f8fb 100%);}
+body.dark{background:linear-gradient(180deg,#07101a 0%, #071526 100%); color:#e6eef6;}
+.container{max-width:1200px;margin:18px auto;padding:16px;display:flex;flex-direction:column;gap:12px;}
+.splash{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:26px;border-radius:18px;background:linear-gradient(135deg,#ffffff88,#f0f6ff88);box-shadow:var(--shadow);}
+.logoCircle{width:86px;height:86px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;box-shadow:0 10px 30px rgba(6,95,70,0.15);}
+.authWrap{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.panel{background:var(--card);padding:12px;border-radius:12px;box-shadow:var(--shadow);min-width:280px;display:flex;flex-direction:column;gap:10px;}
+.input{padding:10px;border-radius:8px;border:1px solid rgba(10,20,30,0.06);font-size:1rem}
+.btn{padding:10px 12px;background:var(--accent);color:#fff;border:0;border-radius:8px;cursor:pointer;box-shadow:0 6px 18px rgba(76,175,80,0.14)}
+.btn.ghost{background:transparent;border:1px solid rgba(10,20,30,0.06);color:var(--muted)}
+.small{padding:8px 10px;border-radius:8px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px}
+.logoSmall{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+.controls{display:flex;align-items:center;gap:8px}
+.topRow{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.progress{background:rgba(10,20,30,0.06);border-radius:999px;width:260px;height:12px;overflow:hidden}
+.progressBar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%;transition:width .8s}
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px}
+.column{background:var(--card);padding:12px;border-radius:14px;box-shadow:var(--shadow);min-height:220px;display:flex;flex-direction:column;}
+.colHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cards{display:flex;flex-direction:column;gap:10px;flex:1;}
+.card{background:linear-gradient(180deg,#fff,#fbfdff);padding:12px;border-radius:10px;box-shadow:0 6px 14px rgba(10,20,40,0.04);cursor:grab;transition:transform .12s,box-shadow .12s;position:relative;overflow:hidden}
+body.dark .card{background:linear-gradient(180deg,#0f1724,#0b1420)}
+.card:hover{transform:translateY(-6px)}
+.cardTitle{font-weight:700;margin-bottom:6px}
+.meta{font-size:0.82rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+.badge{padding:5px 8px;border-radius:999px;color:white;font-weight:700;font-size:0.78rem}
+.badge.low{background:#16a34a}
+.badge.medium{background:#f97316}
+.badge.high{background:#ef4444}
+.badge.cat{background:#0ea5e9}
+.badge.rec{background:#7c3aed}
+.cardFooter{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.cardActions{display:flex;gap:8px}
+.modalWrap{position:fixed;inset:0;background:rgba(2,6,23,0.5);display:flex;align-items:center;justify-content:center;z-index:1200}
+.modal{background:var(--card);padding:12px;border-radius:12px;min-width:320px;max-width:720px;box-shadow:var(--shadow)}
+.formRow{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.formRow input,.formRow select,.formRow textarea{padding:10px;border-radius:8px;border:1px solid rgba(15,23,42,0.06);flex:1}
+.formRow textarea{min-height:80px;resize:vertical}
+.toast {position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:linear-gradient(90deg,var(--accent),var(--accent2));color:white;padding:12px 18px;border-radius:999px;box-shadow:var(--shadow);z-index:1500;display:flex;gap:12px;align-items:center}
+.toast button{background:transparent;border:0;color:white;font-weight:700;padding:8px 10px;border-radius:8px;cursor:pointer}
+.small-muted{font-size:.85rem;color:var(--muted)}
+@media(max-width:980px){
+  .board{grid-template-columns:1fr}
+  .authWrap{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<div class="container" id="appRoot">
+
+  <!-- Splash -->
+  <div id="splash" class="splash">
+    <div class="logoCircle">⏳</div>
+    <div style="text-align:center">
+      <h1 style="margin:0">TaskFlow</h1>
+      <div style="color:var(--muted)">Stay ahead of your day — beautifully organized.</div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button id="startBtn" class="btn">Get started</button>
+      <button id="skipSplash" class="btn ghost">Skip</button>
+    </div>
+  </div>
+
+  <!-- Auth -->
+  <div id="authArea" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px">
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="logoSmall">TF</div>
+        <div>
+          <div style="font-weight:700">TaskFlow</div>
+          <div style="font-size:0.85rem;color:var(--muted)">Sign up or sign in with email</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:0.9rem;color:var(--muted)">Login UI</label>
+        <select id="loginStyleSelect" class="input">
+          <option value="minimal">Minimal</option>
+          <option value="modern">Modern</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+    </div>
+    <div class="authWrap">
+      <div class="panel" id="loginPanel">
+        <strong>Sign in</strong>
+        <input id="loginEmail" class="input" placeholder="Email" type="email" />
+        <input id="loginPassword" class="input" placeholder="Password" type="password" />
+        <div style="display:flex;gap:8px">
+          <button id="btnLogin" class="btn">Login</button>
+          <button id="btnGoSignup" class="btn ghost">Sign up</button>
+        </div>
+      </div>
+      <div class="panel" id="signupPanel">
+        <strong>Create account</strong>
+        <input id="signupEmail" class="input" placeholder="Email" type="email" />
+        <input id="signupPassword" class="input" placeholder="Password (min 6 chars)" type="password" />
+        <input id="signupPassword2" class="input" placeholder="Confirm Password" type="password" />
+        <div style="display:flex;gap:8px">
+          <button id="btnSignup" class="btn">Create</button>
+          <button id="btnGoLogin" class="btn ghost">Back</button>
+        </div>
+        <div id="verificationArea" style="margin-top:10px;display:none;color:var(--muted)">Verification required. Check your inbox.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="mainApp" style="display:none">
+    <div class="header">
+      <div class="brand" style="gap:10px">
+        <div class="logoSmall" id="appLogo">TF</div>
+        <div>
+          <div class="title">TaskFlow</div>
+          <div class="small-muted" id="userEmailDisplay"></div>
+        </div>
+      </div>
+      <div class="controls">
+        <input id="quickSearch" class="input" placeholder="Search tasks..." style="width:220px" />
+        <button id="btnNewTask" class="btn small">+ New Task</button>
+        <button id="btnSettings" class="btn ghost small">Settings</button>
+        <button id="btnLogout" class="btn ghost small">Logout</button>
+      </div>
+    </div>
+
+    <div class="topRow">
+      <div style="display:flex;gap:12px;align-items:center">
+        <div style="font-weight:700">Progress</div>
+        <div class="progress"><div id="progressFill" class="progressBar" style="width:0%"></div></div>
+        <div id="progressPercent" style="font-weight:700">0%</div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <canvas id="priorityChart" style="min-width:220px"></canvas>
+        <canvas id="categoryChart" style="min-width:220px"></canvas>
+      </div>
+    </div>
+
+    <div class="board" id="board">
+      <div class="column">
+        <div class="colHead"><strong>To Do</strong><span id="countTodo" class="small-muted">0</span></div>
+        <div id="todoList" class="cards"></div>
+      </div>
+      <div class="column">
+        <div class="colHead"><strong>In Progress</strong><span id="countProg" class="small-muted">0</span></div>
+        <div id="progList" class="cards"></div>
+      </div>
+      <div class="column">
+        <div class="colHead"><strong>Completed</strong><span id="countDone" class="small-muted">0</span></div>
+        <div id="doneList" class="cards"></div>
+      </div>
+    </div>
+
+    <div id="toastArea"></div>
+    <div id="modalArea"></div>
+  </div>
+
+</div>
+
+<script>
+/* ------------------ Firebase Setup ------------------ */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_ID",
+  appId: "YOUR_APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+/* ------------------ App State ------------------ */
+const state = {
+  user: null,
+  tasks: [],
+  filter: '',
+  themes: ['minimal','modern','dark'],
+  theme: 'minimal'
+};
+
+/* ------------------ Utilities ------------------ */
+const escapeHtml = (str) => str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const showToast = (msg, timeout=3000) => {
+  const toast = document.createElement('div');
+  toast.className = 'toast'; toast.innerHTML = msg + `<button onclick="this.parentNode.remove()">×</button>`;
+  document.getElementById('toastArea').appendChild(toast);
+  setTimeout(()=>toast.remove(), timeout);
+};
+const saveTasks = ()=>localStorage.setItem('tasks', JSON.stringify(state.tasks));
+const loadTasks = ()=>{const t=localStorage.getItem('tasks');state.tasks=t?JSON.parse(t):[]};
+
+/* ------------------ Splash ------------------ */
+document.getElementById('startBtn').onclick=()=>{document.getElementById('splash').style.display='none';document.getElementById('authArea').style.display='block'};
+document.getElementById('skipSplash').onclick=()=>{document.getElementById('splash').style.display='none';document.getElementById('authArea').style.display='block'};
+
+/* ------------------ Auth Handlers ------------------ */
+const updateUserDisplay=()=>document.getElementById('userEmailDisplay').innerText=state.user.email;
+document.getElementById('btnSignup').onclick=async()=>{
+  const email=document.getElementById('signupEmail').value;
+  const pass=document.getElementById('signupPassword').value;
+  const pass2=document.getElementById('signupPassword2').value;
+  if(pass!==pass2){showToast('Passwords do not match');return;}
+  try{
+    const userCred = await auth.createUserWithEmailAndPassword(email, pass);
+    await userCred.user.sendEmailVerification();
+    document.getElementById('verificationArea').style.display='block';
+    showToast('Verification email sent');
+  }catch(e){showToast(e.message);}
+};
+document.getElementById('btnLogin').onclick=async()=>{
+  const email=document.getElementById('loginEmail').value;
+  const pass=document.getElementById('loginPassword').value;
+  try{
+    const userCred = await auth.signInWithEmailAndPassword(email, pass);
+    if(!userCred.user.emailVerified){showToast('Please verify your email');return;}
+    state.user = userCred.user; enterApp();
+  }catch(e){showToast(e.message);}
+};
+document.getElementById('btnLogout').onclick=async()=>{await auth.signOut();location.reload();}
+document.getElementById('btnGoSignup').onclick=()=>{document.getElementById('loginPanel').style.display='none';document.getElementById('signupPanel').style.display='block';}
+document.getElementById('btnGoLogin').onclick=()=>{document.getElementById('signupPanel').style.display='none';document.getElementById('loginPanel').style.display='block';}
+
+/* ------------------ App Entry ------------------ */
+function enterApp(){
+  document.getElementById('authArea').style.display='none';
+  document.getElementById('mainApp').style.display='block';
+  updateUserDisplay();
+  loadTasks(); renderBoard(); renderCharts(); updateProgress();
+}
+
+/* ------------------ Task CRUD ------------------ */
+const statuses=['todoList','progList','doneList'];
+function createTaskCard(task){
+  const div=document.createElement('div'); div.className='card';
+  div.draggable=true; div.dataset.id=task.id;
+  div.innerHTML=`<div class="cardTitle">${escapeHtml(task.title)}</div>
+  <div class="meta"><span class="badge ${task.priority}">${task.priority}</span>
+  ${task.category?`<span class="badge cat">${escapeHtml(task.category)}</span>`:''}
+  ${task.recurring?`<span class="badge rec">${escapeHtml(task.recurring)}</span>`:''}</div>
+  <div class="cardFooter"><div class="small-muted">${task.due||''}</div>
+  <div class="cardActions"><button onclick="editTask('${task.id}')">Edit</button><button onclick="deleteTask('${task.id}')">Delete</button></div></div>`;
+  return div;
+}
+function renderBoard(){
+  statuses.forEach(s=>{
+    const list=document.getElementById(s); list.innerHTML='';
+    const filtered = state.tasks.filter(t=>t.status===s && t.title.toLowerCase().includes(state.filter.toLowerCase()));
+    filtered.forEach(t=>list.appendChild(createTaskCard(t)));
+    document.getElementById('countTodo').innerText=state.tasks.filter(t=>t.status==='todoList').length;
+    document.getElementById('countProg').innerText=state.tasks.filter(t=>t.status==='progList').length;
+    document.getElementById('countDone').innerText=state.tasks.filter(t=>t.status==='doneList').length;
+  });
+  initDragDrop();
+}
+
+/* ------------------ Drag & Drop ------------------ */
+function initDragDrop(){
+  statuses.forEach(s=>{
+    new Sortable(document.getElementById(s),{
+      group:'tasks',
+      animation:150,
+      onEnd:(evt)=>{
+        const id=evt.item.dataset.id;
+        const task=state.tasks.find(t=>t.id===id);
+        task.status=s;
+        saveTasks(); renderBoard(); updateProgress(); renderCharts();
+      }
+    });
+  });
+}
+
+/* ------------------ Charts ------------------ */
+let priorityChartInstance, categoryChartInstance;
+function renderCharts(){
+  const ctxP=document.getElementById('priorityChart'); const ctxC=document.getElementById('categoryChart');
+  const prioCount={low:0,medium:0,high:0}; state.tasks.forEach(t=>prioCount[t.priority] = (prioCount[t.priority]||0)+1);
+  const catCount={}; state.tasks.forEach(t=>{if(t.category) catCount[t.category]=(catCount[t.category]||0)+1;});
+  if(priorityChartInstance) priorityChartInstance.destroy();
+  priorityChartInstance=new Chart(ctxP,{type:'doughnut',data:{labels:Object.keys(prioCount),datasets:[{data:Object.values(prioCount),backgroundColor:['#16a34a','#f97316','#ef4444']}]},options:{plugins:{legend:{position:'bottom'}}}});
+  if(categoryChartInstance) categoryChartInstance.destroy();
+  categoryChartInstance=new Chart(ctxC,{type:'doughnut',data:{labels:Object.keys(catCount),datasets:[{data:Object.values(catCount),backgroundColor:Object.keys(catCount).map(()=>'#0ea5e9')}]},options:{plugins:{legend:{position:'bottom'}}}});
+}
+
+/* ------------------ Progress ------------------ */
+function updateProgress(){
+  const total=state.tasks.length;
+  const done=state.tasks.filter(t=>t.status==='doneList').length;
+  const perc = total? Math.round(done/total*100) :0;
+  document.getElementById('progressFill').style.width=perc+'%';
+  document.getElementById('progressPercent').innerText=perc+'%';
+}
+
+/* ------------------ Quick Search ------------------ */
+document.getElementById('quickSearch').oninput=(e)=>{state.filter=e.target.value;renderBoard();}
+
+/* ------------------ New Task ------------------ */
+document.getElementById('btnNewTask').onclick=()=>openTaskModal();
+
+function openTaskModal(task=null){
+  const modal=document.createElement('div'); modal.className='modalWrap';
+  modal.innerHTML=`<div class="modal">
+  <h3>${task?'Edit Task':'New Task'}</h3>
+  <div class="formRow"><input id="taskTitle" placeholder="Title" value="${task?task.title:''}"/></div>
+  <div class="formRow"><input id="taskDue" type="date" value="${task?task.due:''}"/></div>
+  <div class="formRow"><select id="taskPriority">
+    <option value="low" ${task&&task.priority==='low'?'selected':''}>Low</option>
+    <option value="medium" ${task&&task.priority==='medium'?'selected':''}>Medium</option>
+    <option value="high" ${task&&task.priority==='high'?'selected':''}>High</option>
+  </select></div>
+  <div class="formRow"><input id="taskCategory" placeholder="Category" value="${task?task.category:''}"/></div>
+  <div class="formRow"><input id="taskRecurring" placeholder="Recurring" value="${task?task.recurring:''}"/></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+    <button id="taskSave" class="btn">${task?'Save':'Add'}</button>
+    <button id="taskCancel" class="btn ghost">Cancel</button>
+  </div>
+  </div>`;
+  document.getElementById('modalArea').appendChild(modal);
+  modal.querySelector('#taskCancel').onclick=()=>modal.remove();
+  modal.querySelector('#taskSave').onclick=()=>{
+    const tObj={
+      id: task?task.id:Date.now().toString(),
+      title: modal.querySelector('#taskTitle').value,
+      due: modal.querySelector('#taskDue').value,
+      priority: modal.querySelector('#taskPriority').value,
+      category: modal.querySelector('#taskCategory').value,
+      recurring: modal.querySelector('#taskRecurring').value,
+      status: task?task.status:'todoList'
+    };
+    if(task){
+      const idx=state.tasks.findIndex(t=>t.id===task.id); state.tasks[idx]=tObj;
+    } else state.tasks.push(tObj);
+    saveTasks(); renderBoard(); renderCharts(); updateProgress(); modal.remove();
+  };
+}
+
+/* ------------------ Edit/Delete ------------------ */
+function editTask(id){ const t=state.tasks.find(t=>t.id===id); openTaskModal(t);}
+function deleteTask(id){if(confirm('Delete this task?')){state.tasks=state.tasks.filter(t=>t.id!==id);saveTasks();renderBoard();renderCharts();updateProgress();}}
+
+/* ------------------ Settings ------------------ */
+document.getElementById('btnSettings').onclick=()=>showToast('Settings coming soon');
+
+</script>
+</body>
+</html>
